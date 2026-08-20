@@ -1,0 +1,52 @@
+name: Build accounting quiz runtime v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'accounting-quiz-data/runtime-v1/source/READY'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct runtime JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p accounting-quiz-data/runtime-v1
+          cat accounting-quiz-data/runtime-v1/source/q*.part > /tmp/questions.b64
+          base64 -d /tmp/questions.b64 > /tmp/questions.xz
+          xz -dc /tmp/questions.xz > accounting-quiz-data/runtime-v1/questions.json
+          cat accounting-quiz-data/runtime-v1/source/c*.part > /tmp/curriculum.b64
+          base64 -d /tmp/curriculum.b64 > /tmp/curriculum.xz
+          xz -dc /tmp/curriculum.xz > accounting-quiz-data/runtime-v1/curriculum.json
+          python3 - <<'PY'
+          import json
+          q=json.load(open('accounting-quiz-data/runtime-v1/questions.json',encoding='utf-8'))
+          c=json.load(open('accounting-quiz-data/runtime-v1/curriculum.json',encoding='utf-8'))
+          assert len(q['questions']) == 956, len(q['questions'])
+          assert c.get('current_checkpoint') == 'P08-10', c.get('current_checkpoint')
+          print('questions:', len(q['questions']))
+          print('checkpoint:', c.get('current_checkpoint'))
+          PY
+      - name: Commit generated runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add accounting-quiz-data/runtime-v1/questions.json accounting-quiz-data/runtime-v1/curriculum.json
+          if git diff --cached --quiet; then
+            echo 'No runtime changes.'
+          else
+            git commit -m 'Build accounting quiz runtime v1 [skip ci]'
+            git push
+          fi
