@@ -1,0 +1,45 @@
+name: Sync accounting quiz data
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/sync-accounting-quiz-data.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download quiz data from deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p accounting-quiz-data
+          curl --fail --location --retry 3 \
+            'https://accounting-quiz-site-jrgmot4fz-syeonsh.vercel.app/data/questions.json' \
+            -o accounting-quiz-data/questions.json
+          curl --fail --location --retry 3 \
+            'https://accounting-quiz-site-jrgmot4fz-syeonsh.vercel.app/data/curriculum.json' \
+            -o accounting-quiz-data/curriculum.json
+          test -s accounting-quiz-data/questions.json
+          test -s accounting-quiz-data/curriculum.json
+
+      - name: Commit data
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add accounting-quiz-data/questions.json accounting-quiz-data/curriculum.json
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'Sync accounting quiz data'
+            git push
+          fi
